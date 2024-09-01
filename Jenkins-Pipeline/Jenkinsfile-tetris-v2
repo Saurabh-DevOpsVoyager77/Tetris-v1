@@ -1,0 +1,79 @@
+pipeline {
+    agent any
+
+    tools {
+        jdk 'jdk17'
+        nodejs 'node16'
+    }
+
+    environment {
+        SCANNER_HOME = tool 'sonar-scanner'
+    }
+
+    stages {
+        stage('Checkout') {
+            steps {
+                git branch: 'main', url: 'https://github.com/Saurabh-DevOpsVoyager77/Tetris-v2.git'
+            }
+        }
+        
+        stage('Sonar Analysis') {
+            steps {
+                withSonarQubeEnv('sonar-server') {
+                    sh '''
+                        $SCANNER_HOME/bin/sonar-scanner \
+                        -Dsonar.projectName=TetrisV2 \
+                        -Dsonar.projectKey=TetrisV2
+                    '''
+                }
+            }
+        }
+        
+        stage('Quality Check') {
+            steps {
+                script {
+                    waitForQualityGate abortPipeline: false, credentialsId: 'Sonar-token'
+                }
+            }
+        }
+        
+        stage('NPM Install') {
+            steps {
+                sh 'npm install'
+            }
+        }
+        
+        stage('Trivy FS Scan') {
+            steps {
+                sh 'trivy fs . > trivyfs.txt'
+            }
+        }
+        
+        stage('OWASP FS Scan') {
+            steps {
+                dependencyCheck additionalArguments: '--scan ./ --disableYarnAudit --disableNodeAudit', odcInstallation: 'DP-Check'
+                dependencyCheckPublisher pattern: '**/dependency-check-report.xml'
+            }
+        }
+        
+        stage('Docker Build & Push') {
+            steps {
+                script {
+                    withDockerRegistry(credentialsId: 'docker', toolName: 'docker') {
+                        sh '''
+                            docker build -t tetrisv2 .
+                            docker tag tetrisv2 nacromancer858/tetrisv2
+                            docker push nacromancer858/tetrisv2:latest
+                        '''
+                    }
+                }
+            }
+        }
+        
+        stage('Trivy Image Scan') {
+            steps {
+                sh 'trivy image nacromancer858/tetrisv2:latest > trivyimage.txt'
+            }
+        }
+    }
+}

@@ -1,0 +1,25 @@
+pipeline {
+    agent any
+
+    stages {
+        stage('Clone') {
+            steps {
+               git branch: 'main', url: 'https://github.com/Saurabh-DevOpsVoyager77/Tetris-v1.git'
+            }
+        }
+        stage('terraform init') {
+            steps {
+                dir('Eks-terraform') {
+                    sh 'terraform init'
+                }
+            }
+        }
+        stage('terraform apply/destroy') {
+            steps {
+                dir('Eks-terraform') {
+                    sh 'terraform ${action} --auto-approve'
+                }
+            }
+        } 
+    }
+}
